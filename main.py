@@ -11,7 +11,8 @@ def launch_game():
     #pygame.mixer.music.play(-1)  # -1 means loop forever
     #pygame.mixer.music.set_volume(0.3)
 
-    sound = pygame.mixer.Sound("AimGameMusic.ogg")
+    #sound = pygame.mixer.Sound("AimGameMusic.ogg")
+    sound = pygame.mixer.Sound("AimTrainNewMusic.mp3")
     sound.set_volume(0.3)
     sound.play(loops=-1)
 
@@ -30,7 +31,7 @@ def launch_game():
     # Circle properties
     CIRCLE_RADIUS = 20
     CIRCLE_BORDER_RADIUS = 2
-    HEADER_OFFSET_FROM_TOP = 44
+    HEADER_OFFSET_FROM_TOP = 60
     circle_pos = (random.randint(CIRCLE_RADIUS, WIDTH - CIRCLE_RADIUS),
                   random.randint(CIRCLE_RADIUS + HEADER_OFFSET_FROM_TOP, HEIGHT - CIRCLE_RADIUS))
 
@@ -39,7 +40,9 @@ def launch_game():
     circle_timer = pygame.time.get_ticks()
 
     score = 0
-    font = pygame.font.SysFont(None, 48)
+    instructionFont = pygame.font.SysFont(None, 36)
+    scoreFront = pygame.font.SysFont(None, 23)
+
 
     clock = pygame.time.Clock()
 
@@ -47,20 +50,25 @@ def launch_game():
     while running:
         screen.fill(WHITE)
 
-        #Draw the black line
-        pygame.draw.line(screen, BLACK, (0, 44), (800, 44), width=2)
+        #Draw the blue lines for top border
+        pygame.draw.line(screen, BLUE, (0, 60), (799, 60), width=2)
+        pygame.draw.line(screen, BLUE, (0, 0), (799, 0), width=2)
+        pygame.draw.line(screen, BLUE, (0, 60), (0, 0), width=2)
+        pygame.draw.line(screen, BLUE, (799, 0), (799, 60), width=2)
+
+        # Display instructions
+        instruction_text = instructionFont.render("Click the Green Circle!", True, BLACK)
+        screen.blit(instruction_text, (250, 10))
+
+        # Display score
+        score_text = scoreFront.render(f"Score: {score}", True, BLACK)
+        screen.blit(score_text, (350, 40))
 
         # Draw the circle
         pygame.draw.circle(screen, GREEN, circle_pos, CIRCLE_RADIUS)
         pygame.draw.circle(screen, BLACK, circle_pos, CIRCLE_RADIUS, CIRCLE_BORDER_RADIUS)
 
-        # Display score
-        score_text = font.render(f"Score: {score}", True, BLACK)
-        screen.blit(score_text, (10, 10))
 
-        #Display instructions
-        instruction_text = font.render("Click the Green Circle!", True, BLACK)
-        screen.blit(instruction_text, (250, 10))
 
         pygame.display.flip()
 
