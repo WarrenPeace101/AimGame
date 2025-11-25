@@ -11,10 +11,12 @@ class GameScreen:
         self.YELLOW = (255, 255, 0)
         self.GREEN = (0, 255, 0)
         self.BLUE = (0, 0, 255)
+        self.BLOOD_RED = (138, 3, 3, 180)
 
         # fonts
-        self.BIG_HEADER_FONT = pygame.font.SysFont(None, 36)
+        self.BIG_HEADER_FONT = pygame.font.SysFont(None, 35)
         self.MINI_HEADER_FONT = pygame.font.SysFont(None, 23)
+        self.GAME_OVER_FONT = pygame.font.SysFont(None, 80)
 
         # screen information
         self.WIDTH = 800
@@ -22,7 +24,7 @@ class GameScreen:
         self.score = 0
 
         # header information
-        self.HEADER_OFFSET_FROM_TOP = 60
+        self.HEADER_OFFSET_FROM_TOP = 90
 
         #target circle information
         self.TARGET_CIRCLE_VISIBLE_TIME = 1200
@@ -38,6 +40,12 @@ class GameScreen:
         # Lives information
         self.livesLeft = 3
         self.flashUntil = 0
+
+        # Time to click info
+        self.timeToClick = 10000
+        self.lastClickTime = 0
+        self.elapsedTime = 0
+        self.remainingRatio = 0
 
         # Music
         self.backgroundMusic = None
@@ -63,17 +71,16 @@ class GameScreen:
 
             if self.livesLeft == 0:
                 running = False
-                self.gameOver()
-                break
 
+            current_time = pygame.time.get_ticks()
+            self.elapsedTime = current_time - self.lastClickTime
+            self.remainingRatio = max(0, 1 - (self.elapsedTime / self.timeToClick))
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
                 elif event.type == pygame.MOUSEBUTTONDOWN:
-                    self.handleClickLogic(event)
-
-            current_time = pygame.time.get_ticks()
+                    self.handleClickLogic(event, current_time)
 
             # Check if circle time expired - spawn new circle
             if current_time - self.targetCircleTime > self.TARGET_CIRCLE_VISIBLE_TIME:
@@ -83,12 +90,21 @@ class GameScreen:
                                self.HEIGHT - self.TARGET_CIRCLE_RADIUS))
                 self.targetCircleTime = current_time
 
+            # Check if time to click is expired, if so lower lives and reset time to click
+            if current_time - self.lastClickTime > self.timeToClick:
+                self.livesLeft -= 1
+                self.lastClickTime = current_time
+                self.flashUntil = pygame.time.get_ticks() + 50
+
+                lostLifeSound = pygame.mixer.Sound("Miss.mp3")
+                lostLifeSound.set_volume(0.3)
+                lostLifeSound.play(loops=0)
+
             self.drawGameScreen(screen, current_time)
 
             clock.tick(60)
 
-        pygame.quit()
-        sys.exit()
+        self.gameOver(screen)
 
     def drawGameScreen(self, screen, currentTime):
         if currentTime < self.flashUntil:
@@ -97,7 +113,8 @@ class GameScreen:
             # clear screen
             self.drawWhiteBackground(screen)
 
-            # draw the header
+            # draw the health bar and header
+            self.drawHealthBar(screen)
             self.drawHeader(screen)
 
             # Draw the circle
@@ -108,17 +125,34 @@ class GameScreen:
         pygame.display.flip()
 
     def drawFlash(self, screen):
-        screen.fill(self.RED)
+        overlay = pygame.Surface((self.WIDTH, self.HEIGHT), pygame.SRCALPHA)
+        overlay.fill(self.BLOOD_RED)
+        screen.blit(overlay, (0, 0))
 
     def drawWhiteBackground(self, screen):
         screen.fill(self.WHITE)
 
+    def drawHealthBar(self, screen):
+        BAR_X = 50
+        BAR_Y = 64
+        BAR_WIDTH = 700
+        BAR_HEIGHT = 15
+
+        # Background (full bar outline)
+        pygame.draw.rect(screen, self.BLACK, (BAR_X, BAR_Y, BAR_WIDTH, BAR_HEIGHT), width=2)
+
+        # Filled portion, shrinking as time decreases
+        fill_width = int(BAR_WIDTH * self.remainingRatio)
+
+        pygame.draw.rect(screen, self.GREEN, (BAR_X, BAR_Y, fill_width, BAR_HEIGHT))
+        pygame.draw.rect(screen, self.BLACK, (BAR_X, BAR_Y, fill_width, BAR_HEIGHT), width=2)
+
     def drawHeader(self, screen):
         # Draw the blue lines for top border
-        pygame.draw.line(screen, self.BLUE, (0, 60), (799, 60), width=2)
+        pygame.draw.line(screen, self.BLUE, (0, 90), (799, 90), width=2)
         pygame.draw.line(screen, self.BLUE, (0, 0), (799, 0), width=2)
-        pygame.draw.line(screen, self.BLUE, (0, 60), (0, 0), width=2)
-        pygame.draw.line(screen, self.BLUE, (799, 0), (799, 60), width=2)
+        pygame.draw.line(screen, self.BLUE, (0, 90), (0, 0), width=2)
+        pygame.draw.line(screen, self.BLUE, (799, 0), (799, 90), width=2)
 
         # Display instructions
         instruction_text = self.BIG_HEADER_FONT.render("Click the Green Circle!", True, self.BLACK)
@@ -137,7 +171,7 @@ class GameScreen:
         screen.blit(lives_text, (550, 40))
 
 
-    def handleClickLogic(self, event):
+    def handleClickLogic(self, event, currentTime):
         mouse_pos = event.pos
 
         # Check distance between click and circle center
@@ -148,16 +182,88 @@ class GameScreen:
             self.targetCircleLocation = (random.randint(self.TARGET_CIRCLE_RADIUS, self.WIDTH - self.TARGET_CIRCLE_RADIUS),
                           random.randint(self.TARGET_CIRCLE_RADIUS + self.HEADER_OFFSET_FROM_TOP, self.HEIGHT - self.TARGET_CIRCLE_RADIUS))
             self.targetCircleTime = pygame.time.get_ticks()
+            self.lastClickTime = currentTime
         else:
-            self.livesLeft -= 1
-            self.flashUntil = pygame.time.get_ticks() + 50
+            print("todo")
 
-    def gameOver(self):
+
+    def gameOver(self, screen):
         self.backgroundMusic.stop()
 
         gameOverMusic = pygame.mixer.Sound("GameOverMusic.mp3")
         gameOverMusic.set_volume(0.3)
         gameOverMusic.play(loops=0)
+
+        self.drawGameOver(screen)
+
+        waiting = True
+        clock = pygame.time.Clock()
+        while waiting:
+
+
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+            clock.tick(60)
+
+
+
+    def drawGameOver(self, screen):
+        overlay = pygame.Surface((self.WIDTH, self.HEIGHT), pygame.SRCALPHA)
+        overlay.fill(self.BLOOD_RED)
+        screen.blit(overlay, (0, 0))
+
+        #Game Over Text
+        gameOverX = (self.WIDTH // 3) - 40
+        gameOverY = (self.HEIGHT // 3)
+
+        gameOverText = self.GAME_OVER_FONT.render("GAME OVER", True, self.WHITE)
+        screen.blit(gameOverText, (gameOverX, gameOverY))
+
+        #Play Again Button
+        playAgainX = (self.WIDTH // 3) + 15
+        playAgainY = (self.HEIGHT // 3) + 75
+        playAgainWidth = 200
+        playAgainHeight = 50
+
+        playAgainRect = pygame.Rect(playAgainX, playAgainY, playAgainWidth, playAgainHeight)
+        pygame.draw.rect(screen, self.WHITE, playAgainRect)
+        pygame.draw.rect(screen, self.BLACK, playAgainRect, width=2)
+
+        buttonFont = pygame.font.SysFont(None, 36)
+        playAgainText = buttonFont.render("Play Again", True, self.BLACK)
+        playAgainTextRect = playAgainText.get_rect(center=playAgainRect.center)
+        screen.blit(playAgainText, playAgainTextRect)
+
+        #Menu Button
+        menuX = (self.WIDTH // 3) + 15
+        menuY = (self.HEIGHT // 3) + 145
+        menuWidth = 200
+        menuHeight = 50
+
+        menuRect = pygame.Rect(menuX, menuY, menuWidth, menuHeight)
+        pygame.draw.rect(screen, self.WHITE, menuRect)
+        pygame.draw.rect(screen, self.BLACK, menuRect, width=2)
+
+        menuText = buttonFont.render("Menu", True, self.BLACK)
+        menuTextRect = menuText.get_rect(center=menuRect.center)
+        screen.blit(menuText, menuTextRect)
+
+        pygame.display.flip()
+
+
+
+
+
+
+
+
+
+
+
 
 
 
